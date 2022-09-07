@@ -74,19 +74,12 @@ class PipelineCloud:
         print("Authenticating")
         _token = token or self.token
         if _token is None:
-            raise MissingActiveToken(
-                token="", message="Please pass a valid token or set it as an ENV var"
-            )
+            raise MissingActiveToken(token="", message="Please pass a valid token or set it as an ENV var")
         status_url = urllib.parse.urljoin(self.url, "/v2/users/me")
 
-        response = requests.get(
-            status_url, headers={"Authorization": "Bearer %s" % _token}
-        )
+        response = requests.get(status_url, headers={"Authorization": "Bearer %s" % _token})
 
-        if (
-            response.status_code == HTTPStatus.FORBIDDEN
-            or response.status_code == HTTPStatus.UNAUTHORIZED
-        ):
+        if response.status_code == HTTPStatus.FORBIDDEN or response.status_code == HTTPStatus.UNAUTHORIZED:
             raise MissingActiveToken(token=_token)
         else:
             response.raise_for_status()
@@ -140,9 +133,7 @@ class PipelineCloud:
             with open(file_or_path, "rb") as file:
                 buffer = file.read()
             hex_buffer = buffer.hex()
-            return self._post_file(
-                "/v2/files/", io.BytesIO(hex_buffer.encode()), remote_path
-            )
+            return self._post_file("/v2/files/", io.BytesIO(hex_buffer.encode()), remote_path)
         else:
             return self._post_file("/v2/files/", file_or_path, remote_path)
 
@@ -152,16 +143,12 @@ class PipelineCloud:
         return DataGet.parse_obj(uploaded_data)
 
     def upload_python_object_to_file(self, obj, remote_path) -> FileGet:
-        return self.upload_file(
-            io.BytesIO(python_object_to_hex(obj).encode()), remote_path
-        )
+        return self.upload_file(io.BytesIO(python_object_to_hex(obj).encode()), remote_path)
 
     def _initialise_direct_pipeline_file_upload(self, file_size: int) -> str:
         """Initialise a direct multi-part pipeline file upload"""
         direct_upload_schema = PipelineFileDirectUploadInitCreate(file_size=file_size)
-        response = self._post(
-            "/v2/pipeline-files/initiate-multipart-upload", direct_upload_schema.dict()
-        )
+        response = self._post("/v2/pipeline-files/initiate-multipart-upload", direct_upload_schema.dict())
         direct_upload_get = PipelineFileDirectUploadInitGet.parse_obj(response)
         return direct_upload_get.pipeline_file_id
 
@@ -174,12 +161,8 @@ class PipelineCloud:
         the finalisation step).
         """
         # get presigned URL
-        part_upload_schema = PipelineFileDirectUploadPartCreate(
-            pipeline_file_id=pipeline_file_id, part_num=part_num
-        )
-        response = self._post(
-            "/v2/pipeline-files/presigned-url", part_upload_schema.dict()
-        )
+        part_upload_schema = PipelineFileDirectUploadPartCreate(pipeline_file_id=pipeline_file_id, part_num=part_num)
+        response = self._post("/v2/pipeline-files/presigned-url", part_upload_schema.dict())
         part_upload_get = PipelineFileDirectUploadPartGet.parse_obj(response)
         # upload file chunk
         # convert data to hex
@@ -217,9 +200,7 @@ class PipelineCloud:
         file_hash = self._hash_file(pipeline_file.path)
         file_size = os.path.getsize(pipeline_file.path)
 
-        pipeline_file_id = self._initialise_direct_pipeline_file_upload(
-            file_size=file_size
-        )
+        pipeline_file_id = self._initialise_direct_pipeline_file_upload(file_size=file_size)
 
         parts = []
         progress = tqdm(
@@ -249,9 +230,7 @@ class PipelineCloud:
         pipeline_file_get = self._finalise_direct_pipeline_file_upload(
             pipeline_file_id=pipeline_file_id, multipart_metadata=parts
         )
-        return PipelineFileVariableGet(
-            path=pipeline_file.path, file=pipeline_file_get.hex_file, hash=file_hash
-        )
+        return PipelineFileVariableGet(path=pipeline_file.path, file=pipeline_file_get.hex_file, hash=file_hash)
 
     def _get(self, endpoint: str, params: Dict[str, Any] = None):
         headers = {
@@ -312,9 +291,7 @@ class PipelineCloud:
             if monitor.bytes_read == encoder_len:
                 bar.close()
 
-        encoded_stream_data = encoder.MultipartEncoderMonitor(
-            e, callback=progress_callback
-        )
+        encoded_stream_data = encoder.MultipartEncoderMonitor(e, callback=progress_callback)
 
         headers = {
             "Authorization": "Bearer %s" % self.token,
@@ -332,12 +309,10 @@ class PipelineCloud:
     def upload_function(self, function: Function) -> FunctionGet:
         try:
             inputs = [
-                dict(name=name, type_name=python_object_to_name(type))
-                for name, type in function.typing_inputs.items()
+                dict(name=name, type_name=python_object_to_name(type)) for name, type in function.typing_inputs.items()
             ]
             output = [
-                dict(name=name, type_name=python_object_to_name(type))
-                for name, type in function.typing_outputs.items()
+                dict(name=name, type_name=python_object_to_name(type)) for name, type in function.typing_outputs.items()
             ]
 
             file_schema = self.upload_python_object_to_file(function, "/lol")
@@ -377,6 +352,7 @@ class PipelineCloud:
         self,
         new_pipeline_graph: Graph,
         public: bool = False,
+        deploy: bool = True,
         description: str = "",
         tags: Set[str] = None,
     ) -> PipelineGet:
@@ -397,10 +373,7 @@ class PipelineCloud:
 
         new_name = new_pipeline_graph.name
         print("Uploading functions")
-        new_functions = [
-            self.upload_function(_function)
-            for _function in new_pipeline_graph.functions
-        ]
+        new_functions = [self.upload_function(_function) for _function in new_pipeline_graph.functions]
         for i, uploaded_function_schema in enumerate(new_functions):
             new_pipeline_graph.functions[i].local_id = uploaded_function_schema.id
 
@@ -413,9 +386,7 @@ class PipelineCloud:
         from pipeline.objects import PipelineFile
 
         for _var in new_pipeline_graph.variables:
-            _var_type_file = self.upload_file(
-                io.BytesIO(python_object_to_hex(_var.type_class).encode()), "/"
-            )
+            _var_type_file = self.upload_file(io.BytesIO(python_object_to_hex(_var.type_class).encode()), "/")
 
             pipeline_file_schema = None
             if isinstance(_var, PipelineFile):
@@ -432,16 +403,12 @@ class PipelineCloud:
 
             new_variables.append(_var_schema)
 
-        new_graph_nodes = [
-            _node.to_create_schema() for _node in new_pipeline_graph.nodes
-        ]
+        new_graph_nodes = [_node.to_create_schema() for _node in new_pipeline_graph.nodes]
         new_outputs = [_output.local_id for _output in new_pipeline_graph.outputs]
 
         compute_requirements = None
         if new_pipeline_graph.min_gpu_vram_mb:
-            compute_requirements = ComputeRequirements(
-                min_gpu_vram_mb=new_pipeline_graph.min_gpu_vram_mb
-            )
+            compute_requirements = ComputeRequirements(min_gpu_vram_mb=new_pipeline_graph.min_gpu_vram_mb)
 
         try:
             pipeline_create_schema = PipelineCreate(
@@ -461,9 +428,9 @@ class PipelineCloud:
             raise InvalidSchema(schema="Graph", message=str(e))
 
         print("Uploading pipeline graph")
-        response = self._post(
-            "/v2/pipelines", json.loads(pipeline_create_schema.json())
-        )
+        response = self._post("/v2/pipelines", json.loads(pipeline_create_schema.json()))
+        if deploy:
+            print("Pipeline deployed")
         return PipelineGet.parse_obj(response)
 
     def run_pipeline(
@@ -636,7 +603,7 @@ class PipelineCloud:
 
         return Graph.from_schema(p_get_schema)
 
-    def _hash_file(self, file_path: str, block_size=2**20) -> str:
+    def _hash_file(self, file_path: str, block_size=2 ** 20) -> str:
         md5 = hashlib.md5()
         with open(file_path, "rb") as f:
             while True:
