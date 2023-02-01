@@ -82,6 +82,7 @@ class PipelineGetDetailed(PipelineGet):
     public: bool
     # Maps language, e.g. `curl` or `python`, to an example Run creation code snippet
     run_examples: Dict[str, str] = {}
+    environment_id: str
 
 
 class PipelineCreate(BaseModel):
