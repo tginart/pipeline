@@ -73,6 +73,12 @@ class PipelineGet(PipelineGetBrief, RunnableGet):
         orm_mode = True
 
 
+class Environment(BaseModel):
+    id: str
+    name: str
+    deleted_at: Optional[datetime]
+
+
 class PipelineGetDetailed(PipelineGet):
     version: str = "1"
     dependencies: List[str] = ["torch", "transformers"]
@@ -82,7 +88,8 @@ class PipelineGetDetailed(PipelineGet):
     public: bool
     # Maps language, e.g. `curl` or `python`, to an example Run creation code snippet
     run_examples: Dict[str, str] = {}
-    environment_id: str
+    # None if the environment has been deleted
+    environment: Environment
 
 
 class PipelineCreate(BaseModel):
